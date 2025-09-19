@@ -9,7 +9,7 @@ class IsAdminUser(permissions.BasePermission):
             and request.user.role == 'admin'
         )
         
-class IsAdminOnReadOnly(permissions.BasePermission):
+class IsAdminOrReadOnly(permissions.BasePermission):
     
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
