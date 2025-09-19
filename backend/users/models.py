@@ -26,4 +26,7 @@ class User(AbstractUser):
         db_table = 'users'
         verbose_name = 'User'
         verbose_name_plural = 'Users'
-        
+    
+    @property
+    def get_full_name(self):
+        return f'{self.first_name} {self.last_name}'
