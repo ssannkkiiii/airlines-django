@@ -1,5 +1,4 @@
 from pathlib import Path
-import os 
 from decouple import config 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,7 +7,6 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG')
 ALLOWED_HOSTS = []
 
-#main django apps
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -18,7 +16,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
-#installed django apps
 INSTALLED_APPS += [
     'rest_framework',
     'drf_spectacular',
@@ -29,9 +26,9 @@ INSTALLED_APPS += [
     'rest_framework_simplejwt.token_blacklist',
 ]
 
-#my django apps
 INSTALLED_APPS += [
-    'users'
+    'users',
+    'tasks'
 ]
 
 AUTH_USER_MODEL = 'users.User'
