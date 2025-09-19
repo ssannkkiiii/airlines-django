@@ -8,10 +8,15 @@ class User(AbstractUser):
         CLIENT = 'client', 'Client'
         
     email = models.EmailField(unique=True)
+    first_name = models.CharField(max_length=255, verbose_name='User first name')
+    last_name = models.CharField(max_length=255, verbose_name='User last name')
+    date_of_birth = models.DateField(null=True, blank=True)
+     
     role = models.CharField(
         max_length=20,
         choices=UserRoles.choices,
-        default=UserRoles.CLIENT
+        default=UserRoles.CLIENT,
+        verbose_name='User role'
     )
     
     USERNAME_FIELD = "email"
