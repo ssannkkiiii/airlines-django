@@ -21,16 +21,16 @@ INSTALLED_APPS = [
 #installed django apps
 INSTALLED_APPS += [
     'rest_framework',
-    'drf_spectecular',
-    'drf_spectecular_sidecar',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'corsheaders',
     'django_filters'
 ]
 
 #my django apps
-INSTALLED_APPS += [
+"""INSTALLED_APPS += [
     ''
-]
+]"""
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
