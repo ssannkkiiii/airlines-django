@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import Country, Airport, Airline, Airplane, Flight, Ticket
 
+from users.serializers import UserProfileSerializer
+from users.models import User
 
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -95,4 +97,59 @@ class FlightSerializers(serializers.ModelSerializer):
         return data
     
 class TicketSerializer(serializers.ModelSerializer):
-    pass
+    
+    user = UserProfileSerializer(read_only=True)
+    flight = FlightSerializers(read_only=True)
+    
+    user_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), source="user", write_only=True
+    )
+    departure_airport_id = serializers.PrimaryKeyRelatedField(
+        queryset=Flight.objects.all(), source="flight", write_only=True
+    )
+    
+    class Meta:
+        model = Ticket
+        fields = ["id", "flight_id", "flight", "user", "seat_number", "price", "status", "created_at"]
+    
+    def validate_price(self, value):
+        if value.price <= 0:
+            raise serializers.ValidationError("Price cannot be lower than 0")
+        return value 
+    
+    def validate_seat_number(self, value):
+        if len(value) > 5:
+            raise serializers.ValidationError("Number to long")
+        return value.upper()
+    
+    def validate(self, data):
+        
+        flight = data.get('flight')
+        seat = data.get('set_number')
+        
+        if flight and seat:
+            
+            if Ticket.objects.filter(flight=flight, seat_number__iexact=seat).exists():
+                raise serializers.ValidationError(
+                    {"seat_number": "This seat is already taken on this flight."}
+                )
+            
+            
+            occupied_statuses = [
+                Ticket.TicketStatus.BOOKED,
+                Ticket.TicketStatus.PAID,
+                Ticket.TicketStatus.USED,
+            ]
+            occupied_count = Ticket.objects.filter(
+                flight=flight, status__in=occupied_statuses
+            ).count()
+            capacity = None
+            if flight.airplane:
+                capacity = flight.airplane.capacity
+
+            if capacity is not None and occupied_count >= capacity:
+                raise serializers.ValidationError(
+                    {"non_field_errors": "Немає вільних місць на цьому рейсі."}
+                )
+                
+        return data 

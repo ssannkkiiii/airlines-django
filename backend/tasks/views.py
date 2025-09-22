@@ -1,13 +1,17 @@
-from rest_framework import viewsets, permissions, filters
+from rest_framework import viewsets, permissions, filters, status
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Country, Airport, Airline, Airplane, Flight
+from .models import Country, Airport, Airline, Airplane, Flight, Ticket
 from .serializers import (
     CountrySerializer,
     AirportSerializer,
     AirlineSerializer,
     AirplaneSerializer,
-    FlightSerializers
+    FlightSerializers,
+    TicketSerializer
 )
+
+from users.permissions import IsOwnerOrAdmin
 
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all()
@@ -62,3 +66,23 @@ class FlightViewSet(viewsets.ModelViewSet):
     search_fields = ["flight_number", "airplane__model", "airplane__airline__name"]
     ordering_fields = ["departure_time", "arrival_time", "flight_number"]
     lookup_field = "flight_number"
+    
+class TickerViewSet(viewsets.ModelViewSet):
+    queryset = Ticket.objects.select_related("flight", "user").all()
+    serializer_class = TicketSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrAdmin]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filterset_fields = ["flight", "status", "user"]
+    search_fields = ["seat_number", "flight__flight_number", "user__email"]
+    ordering_fields = ["created_at", "price"]
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        if 'flight' in request.data or 'user' in request.data:
+            return Response(
+                {"detail": "You cannot change a flight or user after creation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().update(request, *args, **kwargs)
