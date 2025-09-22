@@ -18,5 +18,5 @@ router.register(r"flights", FlightViewSet, basename="flight")
 router.register(r"tickets", TickerViewSet, basename="ticket")
 
 urlpatterns = [
-    path("api/", include(router.urls)),
+    path("", include(router.urls)),
 ]

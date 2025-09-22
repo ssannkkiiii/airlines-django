@@ -98,32 +98,38 @@ class FlightSerializers(serializers.ModelSerializer):
 
 class TicketSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
-    flight = FlightSerializers(read_only=True)
+    flight = serializers.SerializerMethodField(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source="user", write_only=True
+        queryset=User.objects.all(), source='user', write_only=True
     )
-    departure_airport_id = serializers.PrimaryKeyRelatedField(
-        queryset=Flight.objects.all(), source="flight", write_only=True
+    flight_id = serializers.PrimaryKeyRelatedField(
+        queryset=Flight.objects.all(), source='flight', write_only=True
     )
 
     class Meta:
         model = Ticket
-        fields = ["id", "flight_id", "flight", "user", "seat_number", "price", "status", "created_at"]
+        fields = [
+            "id",
+            "flight_id", "flight",
+            "user", "user_id",
+            "seat_number", "price", "status", "created_at",
+        ]
+        read_only_fields = ("id", "flight", "user", "created_at")
 
     def validate_price(self, value):
-        if value.price <= 0:
-            raise serializers.ValidationError("Price cannot be lower than 0")
+        if value <= 0:
+            raise serializers.ValidationError("Price must be greater than 0.")
         return value
 
     def validate_seat_number(self, value):
         if len(value) > 5:
-            raise serializers.ValidationError("Number to long")
+            raise serializers.ValidationError("Seat number is too long.")
         return value.upper()
 
     def validate(self, data):
-        flight = data.get('flight')
-        seat = data.get('set_number')
+        flight = data.get('flight')  
+        seat = data.get('seat_number')
 
         if flight and seat:
             if Ticket.objects.filter(flight=flight, seat_number__iexact=seat).exists():
@@ -139,13 +145,14 @@ class TicketSerializer(serializers.ModelSerializer):
             occupied_count = Ticket.objects.filter(
                 flight=flight, status__in=occupied_statuses
             ).count()
+
             capacity = None
-            if flight.airplane:
+            if getattr(flight, 'airplane', None):
                 capacity = flight.airplane.capacity
 
             if capacity is not None and occupied_count >= capacity:
                 raise serializers.ValidationError(
-                    {"non_field_errors": "Немає вільних місць на цьому рейсі."}
+                    {"non_field_errors": "There are no available seats on this flight."}
                 )
 
         return data
