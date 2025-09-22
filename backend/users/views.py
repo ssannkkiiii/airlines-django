@@ -11,7 +11,7 @@ from .serializers import (
     UserLoginSerializer, 
     UserProfileSerializer,
 )
-from .permissions import IsAdminUser, IsAdminOrReadOnly 
+from .permissions import IsAdminUser 
 
 class UserRegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
