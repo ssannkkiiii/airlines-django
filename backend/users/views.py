@@ -47,7 +47,6 @@ class UserLoginView(TokenObtainPairView):
         user = serializer.validated_data['user']
         
         refresh = RefreshToken.for_user(user)
-
         
         return Response({
             'user': UserProfileSerializer(user).data,
