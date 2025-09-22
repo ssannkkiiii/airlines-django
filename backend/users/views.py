@@ -10,7 +10,6 @@ from .serializers import (
     UserRegisterSerializer, 
     UserLoginSerializer, 
     UserProfileSerializer,
-    UserUpdateSerializer
 )
 from .permissions import IsAdminUser, IsAdminOrReadOnly 
 
