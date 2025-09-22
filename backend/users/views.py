@@ -92,7 +92,7 @@ def logout_view(request):
         token.blacklist()
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid token!'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
