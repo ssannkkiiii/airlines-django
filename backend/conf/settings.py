@@ -70,8 +70,8 @@ DATABASES = {
         'NAME': config('PG_NAME'),         
         'USER': config('PG_USER'),       
         'PASSWORD': config('PG_PASSWORD'),
-        'HOST': 'localhost',    
-        'PORT': 5432,
+        'HOST': config('PG_HOST'),    
+        'PORT': config('PG_PORT'),
     }
 }
 

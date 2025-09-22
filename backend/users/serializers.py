@@ -3,7 +3,6 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from .models import User
 
-
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True)
@@ -39,9 +38,9 @@ class UserLoginSerializer(serializers.Serializer):
         if email and password:
             user = authenticate(username=email, password=password)
             if not user:
-                raise serializers.ValidationError("U don't have account")
+                raise serializers.ValidationError("User don't have account")
             if not user.is_active:
-                raise serializers.ValidationError("Ur account is disable")
+                raise serializers.ValidationError("Your account is disable")
             attrs['user'] = user 
             return attrs
         else:
