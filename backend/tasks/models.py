@@ -134,3 +134,6 @@ class Ticket(models.Model):
         db_table = 'ticket'
         verbose_name = 'Ticket'
         verbose_name_plural = 'Tickets'
+
+
+    

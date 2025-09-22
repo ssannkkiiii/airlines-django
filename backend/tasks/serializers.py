@@ -43,3 +43,5 @@ class AirplaneSerializer(serializers.ModelSerializer):
         model = Airplane
         fields = ["id", "slug", "model", "capacity", "airline", "airline_id"]
         read_only_fields = ["id", "slug"]
+        
+        

@@ -8,7 +8,6 @@ from .serializers import (
     AirplaneSerializer,
 )
 
-
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all()
     serializer_class = CountrySerializer
@@ -50,3 +49,4 @@ class AirplaneViewSet(viewsets.ModelViewSet):
     search_fields = ["model"]
     ordering_fields = ["model", "capacity"]
     lookup_field = "slug"   
+
