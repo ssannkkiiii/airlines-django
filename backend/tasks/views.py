@@ -51,7 +51,7 @@ class AirplaneViewSet(viewsets.ModelViewSet):
     ordering_fields = ["model", "capacity"]
     lookup_field = "slug"   
 
-class FlightViewSer(viewsets.ModelViewSet):
+class FlightViewSet(viewsets.ModelViewSet):
     queryset = Flight.objects.select_related(
         "airplane", "airplane__airline", "departure_airport", "arrival_airport"
     ).all()
