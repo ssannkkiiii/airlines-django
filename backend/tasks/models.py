@@ -101,7 +101,7 @@ class Flight(models.Model):
     )
 
     def __str__(self):
-        return f"{self.flight_number}: {self.departure_airport.city} → {self.arrival_airport.city}"
+        return f"{self.flight_number}: {self.departure_airport.city} -> {self.arrival_airport.city}"
     
     class Meta:
         db_table = 'flight'

@@ -98,7 +98,7 @@ class FlightSerializers(serializers.ModelSerializer):
 
 class TicketSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
-    flight = serializers.SerializerMethodField(read_only=True)
+    flight = FlightSerializers(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='user', write_only=True
