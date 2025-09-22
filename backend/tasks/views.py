@@ -1,11 +1,12 @@
 from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Country, Airport, Airline, Airplane
+from .models import Country, Airport, Airline, Airplane, Flight
 from .serializers import (
     CountrySerializer,
     AirportSerializer,
     AirlineSerializer,
     AirplaneSerializer,
+    FlightSerializers
 )
 
 class CountryViewSet(viewsets.ModelViewSet):
@@ -50,3 +51,14 @@ class AirplaneViewSet(viewsets.ModelViewSet):
     ordering_fields = ["model", "capacity"]
     lookup_field = "slug"   
 
+class FlightViewSer(viewsets.ModelViewSet):
+    queryset = Flight.objects.select_related(
+        "airplane", "airplane__airline", "departure_airport", "arrival_airport"
+    ).all()
+    serializer_class = FlightSerializers
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filterset_fields = ["status", "departure_airport", "arrival_airport", "airplane"]
+    search_fields = ["flight_number", "airplane__model", "airplane__airline__name"]
+    ordering_fields = ["departure_time", "arrival_time", "flight_number"]
+    lookup_field = "flight_number"
