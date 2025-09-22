@@ -2,7 +2,6 @@ from django.db import models
 from django.utils.text import slugify
 from users.models import User
 
-
 class Country(models.Model):
     slug = models.SlugField(unique=True, null=True, blank=True)
     name = models.CharField(max_length=255, verbose_name='Country name')
@@ -70,7 +69,7 @@ class Airplane(models.Model):
         return f"Airplane {self.model} of {self.airline.name}"
     
     def save(self, *args, **kwargs):
-        if not self.slug:
+        if not self.slug:  
             self.slug = slugify(self.model)
         super().save(*args, **kwargs)
         
