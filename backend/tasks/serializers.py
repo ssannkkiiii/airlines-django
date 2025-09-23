@@ -99,6 +99,7 @@ class FlightSerializers(serializers.ModelSerializer):
 class TicketSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
     flight = FlightSerializers(read_only=True)
+    return_flight = FlightSerializers(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='user', write_only=True
@@ -106,12 +107,16 @@ class TicketSerializer(serializers.ModelSerializer):
     flight_id = serializers.PrimaryKeyRelatedField(
         queryset=Flight.objects.all(), source='flight', write_only=True
     )
+    return_flight_id = serializers.PrimaryKeyRelatedField(
+        queryset=Flight.objects.all(), source='return_flight', write_only=True
+    )
 
     class Meta:
         model = Ticket
         fields = [
-            "id",
+            "id", 
             "flight_id", "flight",
+            'return_flight_id', 'return_flight', 'ticket_type',
             "user", "user_id",
             "seat_number", "price", "status", "created_at",
         ]
@@ -126,9 +131,11 @@ class TicketSerializer(serializers.ModelSerializer):
         if len(value) > 5:
             raise serializers.ValidationError("Seat number is too long.")
         return value.upper()
+    
 
     def validate(self, data):
         flight = data.get('flight')  
+        return_flight = data.get('return_flight')
         seat = data.get('seat_number')
 
         if flight and seat:
@@ -154,5 +161,10 @@ class TicketSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"non_field_errors": "There are no available seats on this flight."}
                 )
-
+                
+        if flight and return_flight:
+            if flight == return_flight:
+                raise serializers.ValidationError(
+                    {"return_flight": "Return flight cannot be the same as the departure flight."}
+                )
         return data

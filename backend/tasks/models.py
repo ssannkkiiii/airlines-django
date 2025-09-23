@@ -115,9 +115,17 @@ class Ticket(models.Model):
         PAID = 'paid', 'Paid'
         FAILED = 'failed', 'Failed'
         USED = 'used', 'Used'
+        
+    class TicketType(models.TextChoices):
+        ONE_WAY = 'one_way', 'One Way'
+        ROUND_TRIP = 'round_trip', 'Round Trip'
 
     flight = models.ForeignKey(Flight, on_delete=models.CASCADE, related_name="tickets")
+    return_flight = models.ForeignKey(Flight, on_delete=models.CASCADE, 
+                                     related_name='return_ticket',
+                                     blank=True, null=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tickets")
+    ticket_type = models.CharField(choices=TicketType, max_length=20, default=TicketType.ONE_WAY)
     seat_number = models.CharField(max_length=5)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(
@@ -128,8 +136,11 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Ticket {self.id} - {self.user.email} - {self.flight.flight_number}"
-    
+        if self.ticket_type == self.TicketType.ROUND_TRIP:
+            return f"{self.user.get_full_name} | {self.flight} - {self.return_flight}"
+        else:
+            return f"{self.user.get_full_name} | {self.flight}"
+
     class Meta:
         db_table = 'ticket'
         verbose_name = 'Ticket'
