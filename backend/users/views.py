@@ -81,7 +81,6 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [IsAdminUser]
-    
 
 class LogoutView(GenericAPIView):
     permission_classes = [IsAuthenticated]
