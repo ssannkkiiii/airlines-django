@@ -13,7 +13,6 @@ from .serializers import (
 
 from users.permissions import IsOwnerOrAdmin
 
-
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all()
     serializer_class = CountrySerializer
@@ -70,7 +69,7 @@ class FlightViewSet(viewsets.ModelViewSet):
     lookup_field = "flight_number"
 
 
-class TickerViewSet(viewsets.ModelViewSet):
+class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.select_related("flight", "user").all()
     serializer_class = TicketSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrAdmin]
