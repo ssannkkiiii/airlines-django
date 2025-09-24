@@ -1,8 +1,10 @@
 from rest_framework import serializers
-from .models import Country, Airport, Airline, Airplane, Flight, Ticket
+from .models import ( Country, Airport, Airline,
+                    Airplane, Flight, Ticket, Seat )
 
 from users.serializers import UserProfileSerializer
 from users.models import User
+import re
 
 
 class CountrySerializer(serializers.ModelSerializer):
@@ -41,14 +43,26 @@ class AirplaneSerializer(serializers.ModelSerializer):
     airline_id = serializers.PrimaryKeyRelatedField(
         queryset=Airline.objects.all(), source="airline", write_only=True
     )
+    total_seats = serializers.ReadOnlyField()
+    seat_configuration = serializers.ReadOnlyField()
 
     class Meta:
         model = Airplane
-        fields = ["id", "slug", "model", "capacity", "airline", "airline_id"]
-        read_only_fields = ["id", "slug"]
+        fields = [
+            "id", "slug", "model", "capacity", "airline", "airline_id",
+            "economy_seats", "business_seats", "first_class_seats",
+            "rows_economy", "seats_per_row_economy",
+            "rows_business", "seats_per_row_business", 
+            "rows_first_class", "seats_per_row_first_class",
+            "total_seats", "seat_configuration"
+        ]
+        read_only_fields = ["id", "slug", "total_seats", "seat_configuration"]
+        
+    def get_seat_configuration(self, obj):
+        return obj.get_seat_configuration()
 
 
-class FlightSerializers(serializers.ModelSerializer):
+class FlightSerializer(serializers.ModelSerializer):
     airplane = AirplaneSerializer(read_only=True)
     departure_airport = AirportSerializer(read_only=True)
     arrival_airport = AirportSerializer(read_only=True)
@@ -62,6 +76,8 @@ class FlightSerializers(serializers.ModelSerializer):
     arrival_airport_id = serializers.PrimaryKeyRelatedField(
         queryset=Airport.objects.all(), source="arrival_airport", write_only=True
     )
+    seat_availability = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Flight
@@ -72,9 +88,24 @@ class FlightSerializers(serializers.ModelSerializer):
             "departure_airport", "departure_airport_id",
             "arrival_airport", "arrival_airport_id",
             "departure_time", "arrival_time", "status",
+            "seat_availability"
         ]
         read_only_fields = ("id",)
 
+    def get_seat_availability(self, obj):
+        summary = obj.get_seat_availability_summary()
+        
+        return [
+            {
+                'seat_class': seat_class,
+                'available': data['available'],
+                'total': data['total'],
+                'occupied': data['occupied'],
+                'percentage_available': round((data['available'] / data['total']) * 100, 2) if data['total'] > 0 else 0
+            }
+            for seat_class, data in summary.items()
+        ]
+    
     def validate(self, data):
         departure_time = data.get("departure_time")
         arrival_time = data.get("arrival_time")
@@ -94,12 +125,52 @@ class FlightSerializers(serializers.ModelSerializer):
                 )
 
         return data
+    
+    
+class SeatSerializer(serializers.ModelSerializer):
+    airplane = AirplaneSerializer(read_only=True)
+    airplane_id = serializers.PrimaryKeyRelatedField(
+        queryset=Airplane.objects.all(), source="airplane", write_only=True
+    )
+    price_multiplier = serializers.ReadOnlyField()
+    is_available_for_flight = serializers.SerializerMethodField()
 
+    class Meta:
+        model = Seat
+        fields = [
+            "id", "airplane", "airplane_id", "seat_number", "seat_class",
+            "row_number", "seat_letter", "status", "is_window_seat",
+            "is_aisle_seat", "is_emergency_exit", "extra_legroom",
+            "price_multiplier", "is_available_for_flight", "created_at", "updated_at"
+        ]
+        read_only_fields = ["id", "airplane", "price_multiplier", "created_at", "updated_at"]
+        
+    def get_is_available_for_flight(self, obj):
+        flight_id = self.context.get('flight_id')
+        if flight_id:
+            try:
+                flight = Flight.objects.get(id=flight_id)
+                return obj.is_available(flight)
+            except Flight.DoesNotExist:
+                return False
+        return obj.status == Seat.SeatStatus.AVAILABLE
+
+    def validate_seat_number(self, value):
+        if not value:
+            return value
+        
+        pattern = r'^\d+[A-Z]$'
+        if not re.match(pattern, value.upper()):
+            raise serializers.ValidationError(
+                "Seat number must be in format like '1A', '12C', etc."
+            )
+        return value.upper()
+ 
 
 class TicketSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
-    flight = FlightSerializers(read_only=True)
-    return_flight = FlightSerializers(read_only=True)
+    flight = FlightSerializer(read_only=True)
+    return_flight = FlightSerializer(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='user', write_only=True
@@ -122,11 +193,11 @@ class TicketSerializer(serializers.ModelSerializer):
             "id",
             "flight_id", "flight",
             "user", "user_id",
-            "seat_number", "price", "total_price", "status", "ticket_type",
+            "seat_id", "seat", "seat_number", "price", "total_price", "status", "ticket_type",
             "return_flight_id", "return_flight", "created_at",
             "is_one_way", "is_round_trip", "is_multi_city",
         ]
-        read_only_fields = ("id", "flight", "user", "return_flight", "created_at")
+        read_only_fields = ("id", "flight", "user", "return_flight", "seat", "created_at")
 
     def validate_price(self, value):
         if value <= 0:
@@ -140,7 +211,8 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         flight = data.get('flight')  
-        seat = data.get('seat_number')
+        seat = data.get('seat')
+        seat_number = data.get('seat_number')
         ticket_type = data.get('ticket_type')
         return_flight = data.get('return_flight')
 
@@ -165,8 +237,18 @@ class TicketSerializer(serializers.ModelSerializer):
                     {"return_flight": "Return flight departure must be after outbound flight arrival."}
                 )
 
-        if flight and seat:
-            if Ticket.objects.filter(flight=flight, seat_number__iexact=seat).exists():
+        if flight and (seat or seat_number):
+            if seat and seat.airplane != flight.airplane:
+                raise serializers.ValidationError(
+                    {"seat": "The selected seat does not belong to this flight's airplane."}
+                )
+            
+            if seat and not seat.is_available(flight):
+                raise serializers.ValidationError(
+                    {"seat": "This seat is not available for this flight."}
+                )
+            
+            if seat_number and Ticket.objects.filter(flight=flight, seat_number__iexact=seat_number).exists():
                 raise serializers.ValidationError(
                     {"seat_number": "This seat is already taken on this flight."}
                 )

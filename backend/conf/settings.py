@@ -1,5 +1,6 @@
 from pathlib import Path
 from decouple import config 
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -99,7 +100,6 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'               
-STATICFILES_DIRS = [BASE_DIR / "static"]  
 STATIC_ROOT = BASE_DIR / "staticfiles" 
 
 MEDIA_URL = '/media/'
@@ -141,8 +141,6 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
-
-from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
