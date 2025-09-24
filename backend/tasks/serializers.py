@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import ( Country, Airport, Airline,
-                    Airplane, Flight, Ticket, Seat )
+                    Airplane, Flight, Ticket, Seat, Order )
 
 from users.serializers import UserProfileSerializer
 from users.models import User
@@ -49,7 +49,7 @@ class AirplaneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Airplane
         fields = [
-            "id", "slug", "model", "capacity", "airline", "airline_id",
+            "id", "slug", "model", "get_total_seats", "airline", "airline_id",
             "economy_seats", "business_seats", "first_class_seats",
             "rows_economy", "seats_per_row_economy",
             "rows_business", "seats_per_row_business", 
@@ -171,6 +171,7 @@ class TicketSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
     flight = FlightSerializer(read_only=True)
     return_flight = FlightSerializer(read_only=True)
+    seat = SeatSerializer(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='user', write_only=True
@@ -180,6 +181,12 @@ class TicketSerializer(serializers.ModelSerializer):
     )
     return_flight_id = serializers.PrimaryKeyRelatedField(
         queryset=Flight.objects.all(), source='return_flight', write_only=True, required=False
+    )
+    seat_id = serializers.PrimaryKeyRelatedField(
+        queryset=Seat.objects.all(),
+        source="seat",
+        write_only=True,
+        required=True
     )
 
     total_price = serializers.ReadOnlyField()
@@ -272,3 +279,17 @@ class TicketSerializer(serializers.ModelSerializer):
                 )
 
         return data
+    
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = [
+            "id", "user", "flight", "seat_class", "seat_preference",
+            "seat", "seat_number", "price", "status", "created_at", "updated_at"
+        ]
+        read_only_fields = ["seat", "seat_number", "price", "status", "created_at", "updated_at"]
+        
+    def create(self, validated_data):
+        order = Order.objects.create(**validated_data)
+        order.allocate_seat()
+        return order

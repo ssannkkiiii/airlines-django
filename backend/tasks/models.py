@@ -63,7 +63,6 @@ class Airline(models.Model):
 class Airplane(models.Model):
     slug = models.SlugField(unique=True, null=True, blank=True)
     model = models.CharField(max_length=100)
-    capacity = models.PositiveIntegerField()
     airline = models.ForeignKey(Airline, on_delete=models.CASCADE, related_name="airplanes")
 
     economy_seats = models.PositiveIntegerField(default=0, help_text="Number of economy class seats")
@@ -107,6 +106,7 @@ class Airplane(models.Model):
             }
         }
         
+     
     class Meta:
         db_table = 'airplane'
         verbose_name = 'Airplane'
@@ -144,10 +144,15 @@ class Flight(models.Model):
         
         occupied_seats = Ticket.objects.filter(
             flight=self,
-            status__in=[Ticket.TicketStatus.BOOKED, Ticket.TicketStatus.PAID, Ticket.TicketStatus.USED]
-        ).values_list('seat_number', flat=True)
-        
-        return seats.exclude(seat_number__in=occupied_seats)
+            status__in=[
+                Ticket.TicketStatus.BOOKED,
+                Ticket.TicketStatus.PAID,
+                Ticket.TicketStatus.USED
+            ]
+        ).values_list("seat_id", flat=True)
+
+        return seats.exclude(id__in=occupied_seats)
+
     
     def get_seat_availability_summary(self):
         summary = {}
@@ -311,27 +316,6 @@ class Ticket(models.Model):
                 'return_flight': 'Return flight departure must be after outbound flight arrival.'
             })
     
-    def save(self, *args, **kwargs):
-        self.clean()
-        
-        if self.seat_number and not self.seat:
-            try:
-                self.seat = Seat.objects.get(
-                    airplane=self.flight.airplane,
-                    seat_number=self.seat_number
-                )
-            except Seat.DoesNotExist:
-                self.seat = Seat.objects.create(
-                    airplane=self.flight.airplane,
-                    seat_number=self.seat_number,
-                    row_number=int(''.join(filter(str.isdigit, self.seat_number))),
-                    seat_letter=''.join(filter(str.isalpha, self.seat_number))
-                )
-        
-        if self.seat and not self.seat_number:
-            self.seat_number = self.seat.seat_number
-        
-        super().save(*args, **kwargs)
     
     @property
     def is_one_way(self):
@@ -359,3 +343,87 @@ class Ticket(models.Model):
         db_table = 'ticket'
         verbose_name = 'Ticket'
         verbose_name_plural = 'Tickets'
+        unique_together = ("flight", "seat") 
+
+
+class Order(models.Model):
+    
+    class OrderStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PAID = 'paid', 'Paid'
+        CANCELLED = 'cancelled', 'Cancelled'
+        FAILED = 'failed', 'Failed'
+        
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    flight = models.ForeignKey(Flight, on_delete=models.CASCADE, related_name='orders')
+    seat_class = models.CharField(max_length=20, null=True, blank=True)
+    seat_preference = models.CharField(max_length=20, null=True, blank=True, help_text="'window'|'aisle'|'any'")
+    seat = models.ForeignKey(Seat, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    seat_number = models.CharField(max_length=10, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=OrderStatus.choices, default=OrderStatus.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Order {self.id} - {self.user.email} - {self.flight.flight_number}"
+    
+    class Meta:
+        db_table = "order"
+        verbose_name = "Order"
+        verbose_name_plural = "Orders"
+        
+    def allocate_seat(self):
+        
+        available_seats = self.flight.get_available_seats(seat_class=self.seat_class)
+        
+        if self.seat_preference == "window":
+            available_seats = available_seats.filter(is_window_seat=True)
+        elif self.seat_preference == 'aisle':
+            available_seats = available_seats.filter(is_aisle_seat=True)
+            
+        seat = available_seats.first()
+        if not seat:
+            raise ValidationError("No available seats for your preferences.")
+
+        self.seat = seat 
+        self.seat_number = seat.seat_number
+        
+        base_price = 100.0
+        if self.seat_class == "business":
+            base_price = 300.0
+        elif self.seat_class == "first_class":
+            base_price = 600.0
+
+        self.price = base_price
+        self.save()
+        return self
+    
+    def pay(self):
+        if self.status != self.OrderStatus.PENDING:
+            raise ValidationError("Only pending orders can be paid.")
+        if not self.seat:
+            raise ValidationError("Order has no allocated seat.")
+        
+        ticket = Ticket.objects.create(
+            flight=self.flight,
+            user=self.user,
+            seat=self.seat,
+            seat_number=self.seat_number,
+            price=self.price,
+            status=Ticket.TicketStatus.PAID,
+        )
+        
+        self.status = self.OrderStatus.PAID 
+        self.save(update_fields=["status"])
+        return ticket 
+    
+    def cancel(self):
+        if self.status not in [self.OrderStatus.PENDING, self.OrderStatus.FAILED]:
+            raise ValidationError("Only pending or failed orders can be cancelled.")
+        
+        self.status = self.OrderStatus.CANCELLED
+        self.seat = None 
+        self.seat_number = None
+        self.save(update_fields=["status", "seat", "seat_number"])
+        return self 

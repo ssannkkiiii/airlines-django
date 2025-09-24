@@ -1,7 +1,9 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Country, Airport, Airline, Airplane, Flight, Ticket, Seat
+from .models import ( Country, Airport, Airline, 
+                     Airplane, Flight, Ticket, Seat, Order )
 from .serializers import (
     CountrySerializer,
     AirportSerializer,
@@ -10,6 +12,7 @@ from .serializers import (
     FlightSerializer,
     TicketSerializer,
     SeatSerializer,
+    OrderSerializer
 )
 
 from users.permissions import IsOwnerOrAdmin
@@ -183,3 +186,29 @@ class FlightSeatAvailabilityViewSet(viewsets.ReadOnlyModelViewSet):
         }
         
         return Response(response_data)
+
+
+class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all().select_related("user", "flight", "seat")
+    serializer_class = OrderSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+        
+    @action(detail=True, methods=["post"])
+    def pay(self, request, pk=None):
+        oreder = self.get_object()
+        try:
+            ticket = oreder.pay()
+            return Response({"message": "Order paid successfully", "ticket_id": ticket.id})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
+        try:
+            order.cancel()
+            return Response({"message": "Order cancelled"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

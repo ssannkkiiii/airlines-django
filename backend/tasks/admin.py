@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Flight, Airport, Airplane, Ticket, Country, Airline, Seat
+from .models import (Flight, Airport, Airplane, 
+                     Ticket, Country, Airline, Seat, Order)
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
@@ -15,12 +16,13 @@ class AirportAdmin(admin.ModelAdmin):
 
 @admin.register(Airplane)
 class AirplaneAdmin(admin.ModelAdmin):
-    list_display = ("id", "model", "capacity", "economy_seats", "business_seats", "first_class_seats", "airline")
+    list_display = ("id", "model",  "get_total_seats_display", "economy_seats", "business_seats", "first_class_seats", "airline")
     search_fields = ("model", "airline__name")
-    list_filter = ("capacity", "airline")
+    list_filter = ("airline", )
+    readonly_fields = ("get_total_seats_display", )
     fieldsets = (
         ('Basic Information', {
-            'fields': ('model', 'airline', 'capacity')
+            'fields': ('model', 'airline')
         }),
         ('Seat Configuration', {
             'fields': (
@@ -30,6 +32,10 @@ class AirplaneAdmin(admin.ModelAdmin):
             )
         }),
     )
+    
+    def get_total_seats_display(self, obj):
+        return obj.get_total_seats()
+    get_total_seats_display.short_descriptions = "Total Seats"
 
 @admin.register(Airline)
 class AirlineAdmin(admin.ModelAdmin):
@@ -97,3 +103,30 @@ class TicketAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'flight', 'return_flight', 'seat')
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "flight",
+        "seat",
+        "status",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("status", "created_at", "updated_at")
+    search_fields = ("user__username", "user__email", "flight__code", "seat__seat_number")
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")
+    list_editable = ("status",)
+
+    fieldsets = (
+        ("Main information", {
+            "fields": ("user", "flight", "seat", "status")
+        }),
+        ("System fields", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
