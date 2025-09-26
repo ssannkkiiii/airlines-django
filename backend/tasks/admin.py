@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import Flight, Airport, Airplane, Order, Ticket, Country, Airline
 
+
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
     list_display = ("id", "name")
