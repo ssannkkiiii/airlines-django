@@ -38,21 +38,7 @@ class User(AbstractUser):
         if not self.username:
             self.username = self.email.split('@')[0]
         super().save(*args, **kwargs)
-        
-    @classmethod
-    def from_google_token(cls, token: str) -> "User":
-        request = google.auth.transport.requests.Request()
-        id_info = google.oauth2.id_token.verify_oauth2_token(token, request)
 
-        google_id = id_info["sub"]
-        email = id_info.get("email")
-        name = id_info.get("name")
-        picture = id_info.get("picture")
-
-        user, created = cls.objects.get_or_create(
-            google_id=google_id,
-            defaults={"username": email, "email": email, "first_name": name},
-        )
         if picture:
             user.avatar = picture
             user.save(update_fields=["avatar"])
