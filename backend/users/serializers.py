@@ -68,3 +68,4 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+    
