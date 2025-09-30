@@ -1,9 +1,8 @@
 from rest_framework import serializers
 from .models import Country, Airport, Airline, Airplane, Flight, Order, Ticket
 from users.serializers import UserProfileSerializer
-from users.models import User
 from django.db import transaction
-
+from .cancel_order import cancel_unpaid_order
 
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -163,4 +162,6 @@ class OrderSerializer(serializers.ModelSerializer):
             
             order.total_price = total_price
             order.save()
+            
+            cancel_unpaid_order.apply_async((order.id,), countdown=60)
             return order
