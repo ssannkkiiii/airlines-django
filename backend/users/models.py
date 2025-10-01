@@ -39,7 +39,3 @@ class User(AbstractUser):
             self.username = self.email.split('@')[0]
         super().save(*args, **kwargs)
 
-        if picture:
-            user.avatar = picture
-            user.save(update_fields=["avatar"])
-        return user

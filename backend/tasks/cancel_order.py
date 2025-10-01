@@ -9,7 +9,7 @@ def cancel_unpaid_order(order_id):
         order = Order.objects.get(id=order_id)
         if order.status == Order.OrderStatus.BOOKED:
             if order.created_at <= timezone.now() - timedelta(minutes=1):
-                order.status = Order.OrderStatus.CANCELED
+                order.status = Order.OrderStatus.CANCELLED
                 order.save()
     except Order.DoesNotExist:
         pass

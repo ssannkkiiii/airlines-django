@@ -54,6 +54,9 @@ class AirplaneSerializer(serializers.ModelSerializer):
         
     def get_seat_configuration(self, obj):
         return obj.get_seat_configuration()
+    
+    def get_total_seats(self, obj):
+        return obj.get_total_seats()
 
 
 class FlightSerializer(serializers.ModelSerializer):
@@ -61,15 +64,26 @@ class FlightSerializer(serializers.ModelSerializer):
     departure_airport = AirportSerializer(read_only=True)
     arrival_airport = AirportSerializer(read_only=True)
     seat_availability = serializers.SerializerMethodField()
+    
+    airplane_id = serializers.PrimaryKeyRelatedField(
+        queryset=Airplane.objects.all(), source="airplane", write_only=True
+    )
+    departure_airport_id = serializers.PrimaryKeyRelatedField(
+        queryset=Airport.objects.all(), source="departure_airport", write_only=True
+    )
+    arrival_airport_id = serializers.PrimaryKeyRelatedField(
+        queryset=Airport.objects.all(), source="arrival_airport", write_only=True
+    )
 
     class Meta:
         model = Flight
         fields = [
-            "id", "flight_number", "airplane", "departure_airport", "arrival_airport",
+            "id", "flight_number", "airplane", "airplane_id", "departure_airport", 
+            "departure_airport_id", "arrival_airport", "arrival_airport_id",
             "departure_time", "arrival_time", "status", "economy_seats", "business_seats", 
             "first_class_seats", "seat_availability"
         ]
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "economy_seats", "business_seats", "first_class_seats")
 
     def get_seat_availability(self, obj):
         return {
@@ -121,7 +135,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "user", "flight", "flight_id", "return_flight", "return_flight_id",
-            "ticket_type", "status", "total_price", "created_at", "tickets",
+            "ticket_type", "status", "total_price", "created_at", "tickets", "tickets_data",
             "is_one_way", "is_round_trip"
         ]
         read_only_fields = ("id", "user", "total_price", "created_at", "tickets", "is_one_way", "is_round_trip")
@@ -133,35 +147,30 @@ class OrderSerializer(serializers.ModelSerializer):
         ticket_type = validated_data.get('ticket_type', Order.TicketType.ONE_WAY)
         tickets_data = self.context['request'].data.get('tickets', [])
         
-        with transaction.atomic():
-            order = Order.objects.create(
-                user=user, flight=flight, return_flight=return_flight,
-                ticket_type=ticket_type, status=Order.OrderStatus.BOOKED
-            )
+        if not tickets_data:
+            raise serializers.ValidationError("At least one ticket is required.")
+        
+        total_price = 0
+        
+        for ticket_data in tickets_data:
+            direction = ticket_data.get('direction', 'outbound')
+            target_flight = return_flight if direction == 'return' else flight
             
-            total_price = 0
+            if not target_flight:
+                raise serializers.ValidationError(f"No flight available for {direction} direction.")
             
-            for ticket_data in tickets_data:
-                direction = ticket_data.get('direction', 'outbound')
-                target_flight = return_flight if direction == 'return' else flight
-                
-                try:
-                    target_flight.book_seat(ticket_data['seat_class'])
-                except ValueError as e:
-                    flight_name = "return flight" if direction == 'return' else "outbound flight"
-                    raise serializers.ValidationError(f"{flight_name}: {str(e)}")
-                
-                Ticket.objects.create(
-                    order=order,
-                    seat_number=ticket_data['seat_number'],
-                    seat_class=ticket_data['seat_class'],
-                    direction=Ticket.TicketDirection.OUTBOUND if direction == 'outbound' else Ticket.TicketDirection.RETURN,
-                    price=ticket_data['price']
-                )
-                total_price += ticket_data['price']
+            available_seats = target_flight.get_available_seats(ticket_data['seat_class'])
+            if available_seats <= 0:
+                flight_name = "return flight" if direction == 'return' else "outbound flight"
+                raise serializers.ValidationError(f"{flight_name}: No {ticket_data['seat_class']} seats available.")
             
-            order.total_price = total_price
-            order.save()
-            
-            cancel_unpaid_order.apply_async((order.id,), countdown=60)
-            return order
+            total_price += ticket_data['price']
+        
+        order = Order.objects.create(
+            user=user, flight=flight, return_flight=return_flight,
+            ticket_type=ticket_type, status=Order.OrderStatus.BOOKED,
+            total_price=total_price, tickets_data=tickets_data
+        )
+        
+        cancel_unpaid_order.apply_async((order.id,), countdown=60)
+        return order
