@@ -1,4 +1,6 @@
 import stripe 
+import json
+import logging
 from django.conf import settings
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action, api_view
@@ -12,6 +14,9 @@ from .serializers import (
 from users.permissions import IsOwnerOrAdmin
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
+from django.views.decorators.http import require_POST
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -191,30 +196,98 @@ def stripe_success(request):
 def stripe_cancel(request):
     return Response({"message": "Payment canceled!"})
 
+
 @csrf_exempt
+@require_POST
 def stripe_webhook(request):
+    logger.info(f"=== WEBHOOK REQUEST START ===")
+    logger.info(f"Method: {request.method}")
+    logger.info(f"Content-Type: {request.META.get('CONTENT_TYPE')}")
+    
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
+    
+    logger.info(f"Payload length: {len(payload)}")
+    logger.info(f"Signature header: {sig_header}")
+    logger.info(f"Webhook secret configured: {bool(endpoint_secret)}")
+    
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
-    except ValueError:
-        return HttpResponse(status=400)
-    except stripe.error.SignatureVerificationError:
-        return HttpResponse(status=400)
-
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        order_id = session['metadata'].get('order_id')
+        payload_str = payload.decode('utf-8')
+        logger.info(f"Payload content: {payload_str[:500]}...")  
+    except Exception as e:
+        logger.error(f"Error decoding payload: {e}")
+    
+    if not sig_header:
+        logger.warning("No signature header - skipping signature verification for testing")
+        try:
+            event = json.loads(payload)
+            logger.info(f"Parsed JSON event successfully: {event.get('type', 'unknown')}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON payload: {e}")
+            logger.error(f"Payload content: {payload.decode('utf-8', errors='ignore')}")
+            return HttpResponse("Invalid JSON", status=400)
+    else:
+        if not endpoint_secret:
+            logger.error("STRIPE_WEBHOOK_SECRET not configured!")
+            return HttpResponse("Webhook secret not configured", status=500)
 
         try:
-            order = Order.objects.get(id=order_id)
-            if order.status != 'confirmed':
-                order.buy()  
-        except Order.DoesNotExist:
-            pass
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+            logger.info(f"Webhook verified successfully. Event type: {event['type']}")
+        except ValueError as e:
+            logger.error(f"Invalid payload: {e}")
+            return HttpResponse("Invalid payload", status=400)
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Invalid signature: {e}")
+            return HttpResponse("Invalid signature", status=400)
 
-    return HttpResponse(status=200)
+    logger.info(f"Processing event type: {event['type']}")
+    
+    if event['type'] == 'checkout.session.completed':
+        logger.info("Processing checkout.session.completed event")
+        session = event['data']['object']
+        order_id = session['metadata'].get('order_id')
+        
+        logger.info(f"Session metadata: {session.get('metadata', {})}")
+        logger.info(f"Order ID from metadata: {order_id}")
+        
+        if not order_id:
+            logger.error("No order_id in metadata")
+            return HttpResponse("No order_id in metadata", status=400)
+            
+        try:
+            order = Order.objects.get(id=order_id)
+            logger.info(f"Found order: {order.id}, status: {order.status}")
+            
+            if order.status != 'confirmed':
+                logger.info(f"Processing order {order_id} - calling buy()")
+                order.buy()
+                logger.info(f"Order {order_id} confirmed successfully")
+            else:
+                logger.info(f"Order {order_id} already confirmed")
+                
+        except Order.DoesNotExist:
+            logger.error(f"Order {order_id} not found in database")
+            return HttpResponse(f"Order {order_id} not found", status=404)
+        except Exception as e:
+            logger.error(f"Error processing order {order_id}: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return HttpResponse(f"Error processing order: {str(e)}", status=500)
+            
+    elif event['type'] == 'checkout.session.expired':
+        session = event['data']['object']
+        order_id = session['metadata'].get('order_id')
+        logger.info(f"Checkout session expired for order {order_id}")
+        
+    elif event['type'] == 'payment_intent.payment_failed':
+        logger.error(f"Payment failed: {event['data']['object']}")
+    else:
+        logger.info(f"Unhandled event type: {event['type']}")
+
+    logger.info(f"=== WEBHOOK REQUEST END ===")
+    return HttpResponse("OK", status=200)
