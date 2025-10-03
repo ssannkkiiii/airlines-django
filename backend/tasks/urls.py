@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path, include
 from .views import (
     CountryViewSet, AirportViewSet, AirlineViewSet, AirplaneViewSet,
-    FlightViewSet, OrderViewSet, TicketViewSet
+    FlightViewSet, OrderViewSet, TicketViewSet, create_checkout_session, stripe_success, stripe_cancel, stripe_webhook
 )
 
 router = DefaultRouter()
@@ -16,4 +16,9 @@ router.register(r"tickets", TicketViewSet, basename="ticket")
 
 urlpatterns = [
     path("", include(router.urls)),
+    
+    path("orders/<int:id>/create-checkout-session/", create_checkout_session, name="create-checkout-session"),
+    path("stripe/success/", stripe_success),
+    path("stripe/cancel/", stripe_cancel),
+    path("stripe/webhook/", stripe_webhook),
 ]

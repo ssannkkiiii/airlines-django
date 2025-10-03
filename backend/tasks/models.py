@@ -2,6 +2,7 @@ from django.db import models, transaction
 from django.utils.text import slugify
 from users.models import User
 from django.core.exceptions import ValidationError
+import uuid
 
 
 class Country(models.Model):
@@ -316,3 +317,5 @@ class Ticket(models.Model):
         db_table = 'ticket'
         verbose_name = 'Ticket'
         verbose_name_plural = 'Tickets'
+
+
